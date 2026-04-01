@@ -33,8 +33,59 @@ export type ModelShortName = string
 export type ModelName = string
 export type ModelSetting = ModelName | ModelAlias | null
 
+const DEFAULT_OPENAI_MAIN_MODEL = 'gpt-5.4'
+const DEFAULT_OPENAI_SMALL_FAST_MODEL = 'gpt-5-mini'
+
+/**
+ * 判断当前是否处于 OpenAI-compatible provider。
+ *
+ * 单独抽成小函数是为了让默认模型逻辑更容易读：后面凡是看到这个判断，
+ * 都是在表达“当前这套 Claude 家族默认值不适用了，需要切到 OpenAI 的默认模型”。
+ */
+function isOpenAIProvider(): boolean {
+  return getAPIProvider() === 'openai'
+}
+
+/**
+ * 返回 OpenAI provider 下主推理模型的默认值。
+ *
+ * 这里固定兜底成 `gpt-5.4`，目的是在用户只切 provider、还没补 `OPENAI_MODEL`
+ * 时，主链路依旧能立刻工作，不会意外掉回 Claude 风格的模型名。
+ */
+function getDefaultOpenAIMainModel(): ModelName {
+  return DEFAULT_OPENAI_MAIN_MODEL
+}
+
+/**
+ * 返回 OpenAI provider 下的小快模型默认值。
+ *
+ * 这里不复用主模型，而是给一个更轻量的默认值 `gpt-5-mini`。
+ * 这样凡是走“小而快”路径的能力，例如 side query、轻量分类、辅助判断，
+ * 都不会把成本和延迟直接打到 `gpt-5.4` 上。
+ */
+function getDefaultOpenAISmallFastModel(): ModelName {
+  return DEFAULT_OPENAI_SMALL_FAST_MODEL
+}
+
+/**
+ * 选择当前 provider 下的小快模型。
+ *
+ * 优先级保持不变：
+ * 1. 显式的 `OPENAI_SMALL_FAST_MODEL`
+ * 2. 兼容旧配置的 `ANTHROPIC_SMALL_FAST_MODEL`
+ * 3. provider 自带默认值
+ *
+ * 只有在 OpenAI provider 下，我们才把兜底值切成 OpenAI 的轻量模型；其它 provider
+ * 仍然走原有的 Haiku 默认逻辑。
+ */
 export function getSmallFastModel(): ModelName {
-  return process.env.ANTHROPIC_SMALL_FAST_MODEL || getDefaultHaikuModel()
+  return (
+    process.env.OPENAI_SMALL_FAST_MODEL ||
+    process.env.ANTHROPIC_SMALL_FAST_MODEL ||
+    (isOpenAIProvider()
+      ? getDefaultOpenAISmallFastModel()
+      : getDefaultHaikuModel())
+  )
 }
 
 export function isNonCustomOpusModel(model: ModelName): boolean {
@@ -66,7 +117,11 @@ export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
     specifiedModel = modelOverride
   } else {
     const settings = getSettings_DEPRECATED() || {}
-    specifiedModel = process.env.ANTHROPIC_MODEL || settings.model || undefined
+    specifiedModel =
+      process.env.OPENAI_MODEL ||
+      process.env.ANTHROPIC_MODEL ||
+      settings.model ||
+      undefined
   }
 
   // Ignore the user-specified model if it's not in the availableModels allowlist.
@@ -106,6 +161,9 @@ export function getDefaultOpusModel(): ModelName {
   if (process.env.ANTHROPIC_DEFAULT_OPUS_MODEL) {
     return process.env.ANTHROPIC_DEFAULT_OPUS_MODEL
   }
+  if (isOpenAIProvider()) {
+    return getDefaultOpenAIMainModel()
+  }
   // 3P providers (Bedrock, Vertex, Foundry) — kept as a separate branch
   // even when values match, since 3P availability lags firstParty and
   // these will diverge again at the next model launch.
@@ -120,6 +178,9 @@ export function getDefaultSonnetModel(): ModelName {
   if (process.env.ANTHROPIC_DEFAULT_SONNET_MODEL) {
     return process.env.ANTHROPIC_DEFAULT_SONNET_MODEL
   }
+  if (isOpenAIProvider()) {
+    return getDefaultOpenAIMainModel()
+  }
   // Default to Sonnet 4.5 for 3P since they may not have 4.6 yet
   if (getAPIProvider() !== 'firstParty') {
     return getModelStrings().sonnet45
@@ -131,6 +192,9 @@ export function getDefaultSonnetModel(): ModelName {
 export function getDefaultHaikuModel(): ModelName {
   if (process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL) {
     return process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL
+  }
+  if (isOpenAIProvider()) {
+    return getDefaultOpenAISmallFastModel()
   }
 
   // Haiku 4.5 is available on all platforms (first-party, Foundry, Bedrock, Vertex)
@@ -176,6 +240,13 @@ export function getRuntimeMainLoopModel(params: {
  * @returns The default model setting to use
  */
 export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
+  // OpenAI-compatible provider 不应该再尝试读取 Claude 订阅态。
+  // 只要 provider 已切换，就直接返回 OpenAI 侧的默认主模型，
+  // 避免在无 Anthropic 凭证的环境里触发无意义的鉴权检查。
+  if (isOpenAIProvider()) {
+    return getDefaultSonnetModel()
+  }
+
   // Ants default to defaultModel from flag config, or Opus 1M if not configured
   if (process.env.USER_TYPE === 'ant') {
     return (

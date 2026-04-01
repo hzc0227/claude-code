@@ -28,6 +28,10 @@ import {
   getVertexRegionForModel,
   isEnvTruthy,
 } from '../../utils/envUtils.js'
+import {
+  createOpenAICompatibleFetch,
+  isOpenAIProviderEnabled,
+} from './openaiCompat.js'
 
 /**
  * Environment variables for different client types:
@@ -132,11 +136,14 @@ export async function getAnthropicClient({
   await checkAndRefreshOAuthTokenIfNeeded()
   logForDebugging('[API:auth] OAuth token check complete')
 
-  if (!isClaudeAISubscriber()) {
+  if (!isClaudeAISubscriber() && !isOpenAIProviderEnabled()) {
     await configureApiKeyHeaders(defaultHeaders, getIsNonInteractiveSession())
   }
 
-  const resolvedFetch = buildFetch(fetchOverride, source)
+  const baseFetch = buildFetch(fetchOverride, source)
+  const resolvedFetch = isOpenAIProviderEnabled()
+    ? createOpenAICompatibleFetch(baseFetch)
+    : baseFetch
 
   const ARGS = {
     defaultHeaders,
