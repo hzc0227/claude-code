@@ -1,5 +1,5 @@
 {
-  "name": "claude-js",
+  "name": "@jdi-code/claude-code",
   "version": "1.0.3",
   "description": "Reverse-engineered Anthropic Claude Code CLI — interactive AI coding assistant in the terminal",
   "type": "module",
@@ -25,7 +25,7 @@
     "bun": ">=1.2.0"
   },
   "bin": {
-    "claude-js": "dist/cli.js"
+    "jdiclaude": "dist/cli.js"
   },
   "workspaces": [
     "packages/*",
@@ -34,6 +34,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "bun run build.ts",
     "dev": "bun run src/entrypoints/cli.tsx",
