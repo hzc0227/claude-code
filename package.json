@@ -1,6 +1,6 @@
 {
-  "name": "claude-code-best",
-  "version": "1.1.0",
+  "name": "@jdi-code/claude-code",
+  "version": "1.2.0",
   "description": "Reverse-engineered Anthropic Claude Code CLI — interactive AI coding assistant in the terminal",
   "type": "module",
   "author": "claude-code-best <claude-code-best@proton.me>",
@@ -25,8 +25,7 @@
     "bun": ">=1.2.0"
   },
   "bin": {
-    "ccb": "dist/cli.js",
-    "claude-code-best": "dist/cli.js"
+    "jdiclaude": "dist/cli.js"
   },
   "workspaces": [
     "packages/*",
@@ -37,6 +36,9 @@
     "scripts/download-ripgrep.ts",
     "scripts/postinstall.cjs"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "bun run build.ts",
     "dev": "bun run scripts/dev.ts",
